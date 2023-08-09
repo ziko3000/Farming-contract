@@ -2,9 +2,16 @@ import { ethers } from "hardhat";
 import { expect } from "chai";
 import { parseEther } from "ethers/lib/utils";
 
+/**
+ * @file This file contains tests for the FarmingContract.
+ * @notice These tests validate the functionality of staking, rewards, and owner-based operations.
+ */
 describe("FarmingContract", function () {
     let stakingToken, rewardToken, farming, owner, user1, user2, user3;
 
+    /**
+     * @notice Run some shared setup before each of the tests.
+     */
     beforeEach(async function () {
         [owner, user1, user2, user3] = await ethers.getSigners();
 
@@ -21,6 +28,9 @@ describe("FarmingContract", function () {
         await rewardToken.transfer(farming.address, parseEther("1000"));
     });
 
+    /**
+     * @notice Group of tests specifically for staking functionality.
+     */
     describe("Staking", function() {
         it("allows users to stake tokens", async function () {
             await stakingToken.transfer(user1.address, parseEther("100"));
@@ -40,6 +50,9 @@ describe("FarmingContract", function () {
         });
     });
 
+    /**
+     * @notice Group of tests for the rewards functionality.
+     */
     describe("Rewards", function() {
         it("distributes rewards", async function () {
             await stakingToken.transfer(user1.address, parseEther("100"));
@@ -83,6 +96,7 @@ describe("FarmingContract", function () {
         });
     });
 
+// Group of tests for owner-specific functionalities.
     describe("Owner functions", function() {
         it("allows owner to deposit rewards", async function () {
             await rewardToken.transfer(owner.address, parseEther("500"));
@@ -93,8 +107,7 @@ describe("FarmingContract", function () {
             expect(contractRewardBalance.toString()).to.equal(parseEther("1500").toString()); // 1000 initial + 500 added
         });
 
-        // Add other owner specific tests if needed
     });
 
-    // ... Add more tests for other functionalities or edge cases
+  
 });
