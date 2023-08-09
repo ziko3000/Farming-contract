@@ -8,39 +8,39 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 /**
  * @title FarmingContract
- * @dev A contract that allows users to stake tokens and earn rewards.
+ * @dev This contract allows users to stake tokens and earn rewards.
  */
 contract FarmingContract is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    // Token users receive as a reward for staking.
+    // The token users receive as a reward for staking.
     IERC20 public rewardToken;
 
-    // Token users stake to participate in the reward program.
+    // The token users stake to participate in the farming program.
     IERC20 public stakingToken;
 
-    // Information about the staked tokens and rewards for each user.
+    // Struct to hold details about the user's staking and rewards.
     struct StakingInfo {
-        uint256 amount;  // Amount of tokens staked by the user.
-        uint256 rewardDebt;  // The reward debt the user has accumulated.
+        uint256 amount;        // The amount of tokens staked by the user.
+        uint256 rewardDebt;    // The rewards that the user has claimed so far.
     }
 
-    // Total tokens staked in the contract by all users.
+    // Total amount of tokens staked in the contract by all users.
     uint256 public totalStaked;
 
-    // Stored reward per token. Used to calculate the user's reward.
+    // The reward per token staked, updated during each operation.
     uint256 public rewardPerTokenStored;
 
-    // Timestamp of the last reward update.
+    // The last timestamp when the rewards were last updated.
     uint256 public lastUpdateTime;
 
-    // Rate at which the reward is distributed per token, per second.
+    // The rate at which rewards are distributed per token, per second.
     uint256 public rewardRate;
 
-    // Flag indicating if the reward distribution has been initialized.
+    // Flag to track if the reward distribution has been initialized.
     bool public rewardInitialized = false;
 
-    // Mapping from user address to their staking information.
+    // Maps each user's address to their staking and reward information.
     mapping(address => StakingInfo) public stakers;
 
     event Staked(address indexed user, uint256 amount);
@@ -48,9 +48,9 @@ contract FarmingContract is Ownable, ReentrancyGuard {
     event RewardPaid(address indexed user, uint256 reward);
 
     /**
-     * @dev Contract constructor.
-     * @param _rewardToken Address of the reward token.
-     * @param _stakingToken Address of the staking token.
+     * @notice Constructs the `FarmingContract` contract.
+     * @param _rewardToken The address of the reward token.
+     * @param _stakingToken The address of the staking token.
      */
     constructor(address _rewardToken, address _stakingToken) {
         rewardToken = IERC20(_rewardToken);
@@ -58,8 +58,8 @@ contract FarmingContract is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Modifier to update the reward of the given account.
-     * @param account Address of the account whose reward needs updating.
+     * @notice Update the reward for a given account. This must be called whenever the balance of the staker is changed.
+     * @param account The address of the account to update.
      */
     modifier updateReward(address account) {
         rewardPerTokenStored = rewardPerToken();
@@ -72,31 +72,39 @@ contract FarmingContract is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Sets the reward rate. Only callable by the owner.
-     * @param _rewardRate New reward rate.
+     * @notice Sets the rate of reward distribution.
+     * @dev Only callable by the contract owner.
+     * @param _rewardRate The new rate at which rewards will be distributed.
      */
     function setRewardRate(uint256 _rewardRate) external onlyOwner {
         rewardRate = _rewardRate;
     }
 
     /**
-     * @dev Initializes the reward distribution rate and duration. Can only be called once.
-     * @param rewardAmount Total reward amount to be distributed.
-     * @param duration Duration over which the reward will be distributed.
+     * @notice Initializes the reward distribution mechanism.
+     * @dev Can only be called once by the contract owner.
+     * @param rewardAmount The total amount of rewards to distribute.
+     * @param duration The time over which the rewards will be distributed.
      */
     function initializeRewardDistribution(uint256 rewardAmount, uint256 duration) external onlyOwner {
+        // Ensure rewards have not been initialized before.
         require(!rewardInitialized, "Reward already initialized");
+
+        // Ensure reward amount and duration are valid.
         require(rewardAmount > 0, "Invalid reward amount");
         require(duration > 0, "Invalid duration");
+
+        // Ensure the contract has enough rewards to distribute.
         uint256 balance = rewardToken.balanceOf(address(this));
         require(balance >= rewardAmount, "Insufficient reward balance");
+
         rewardRate = rewardAmount / duration;
         rewardInitialized = true;
     }
 
     /**
-     * @dev Calculates the accumulated reward per token.
-     * @return The current reward per token.
+     * @notice Calculate the current reward per staked token.
+     * @return The reward amount per token staked.
      */
     function rewardPerToken() public view returns (uint256) {
         if (totalStaked == 0) {
@@ -106,56 +114,74 @@ contract FarmingContract is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Calculates the reward earned by the given account.
-     * @param account Address of the account.
-     * @return The reward earned by the account.
+     * @notice Calculate the amount of rewards earned by an account.
+     * @param account The address of the staking account.
+     * @return The amount of rewards earned by the account.
      */
     function earned(address account) public view returns (uint256) {
         return (stakers[account].amount * (rewardPerToken() - stakers[account].rewardDebt)) / 1e18;
     }
 
     /**
-     * @dev Allows a user to stake a certain amount of tokens.
-     * @param amount Amount of tokens to stake.
+     * @notice Stake a specific amount of tokens to earn rewards.
+     * @param amount The amount of tokens to stake.
      */
     function stake(uint256 amount) external updateReward(msg.sender) nonReentrant {
+        // Ensure the staking amount is greater than zero.
         require(amount > 0, "Cannot stake 0");
+
         totalStaked += amount;
         stakers[msg.sender].amount += amount;
+
+        // Use SafeERC20 to ensure a safe token transfer.
         stakingToken.safeTransferFrom(msg.sender, address(this), amount);
+
         emit Staked(msg.sender, amount);
     }
 
     /**
-     * @dev Allows a user to withdraw a certain amount of their staked tokens.
-     * @param amount Amount of tokens to withdraw.
+     * @notice Withdraw staked tokens and stop earning rewards on them.
+     * @param amount The amount of tokens to withdraw.
      */
     function withdraw(uint256 amount) public updateReward(msg.sender) nonReentrant {
+        // Ensure the withdrawal amount is greater than zero.
         require(amount > 0, "Cannot withdraw 0");
+
         totalStaked -= amount;
         stakers[msg.sender].amount -= amount;
+
+        // Use SafeERC20 to ensure a safe token transfer.
         stakingToken.safeTransfer(msg.sender, amount);
+
         emit Withdrawn(msg.sender, amount);
     }
 
     /**
-     * @dev Allows a user to claim their reward.
+     * @notice Claim the rewards earned so far.
      */
     function getReward() public updateReward(msg.sender) nonReentrant {
         uint256 reward = earned(msg.sender);
+
+        // Ensure the user has rewards to claim.
         if (reward > 0) {
             uint256 rewardAmount = rewardToken.balanceOf(address(this));
+            
+            // In case the contract doesn't have enough rewards, adjust to the maximum possible.
             if (rewardAmount < reward) {
-                reward = rewardAmount;  // Adjusting the reward to available amount
+                reward = rewardAmount;
             }
+
             stakers[msg.sender].rewardDebt += reward;
+
+            // Use SafeERC20 to ensure a safe token transfer.
             rewardToken.safeTransfer(msg.sender, reward);
+
             emit RewardPaid(msg.sender, reward);
         }
     }
 
     /**
-     * @dev Allows a user to withdraw all their staked tokens and claim their reward.
+     * @notice Withdraw all staked tokens and claim all rewards.
      */
     function exit() external nonReentrant {
         withdraw(stakers[msg.sender].amount);
@@ -163,9 +189,11 @@ contract FarmingContract is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Allows the owner to deposit reward tokens into the contract.
-     * @param amount Amount of reward tokens to deposit.
+     * @notice Allows the owner to deposit additional reward tokens into the contract.
+     * @param amount The amount of reward tokens to deposit.
      */
+   
+
     function adminDepositRewards(uint256 amount) external onlyOwner {
         rewardToken.safeTransferFrom(msg.sender, address(this), amount);
     }
